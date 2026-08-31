@@ -13,6 +13,12 @@
   <b>Offsets update automatically</b> on launch — FF0L checks the live Roblox version and pulls a fresh table when the game patches.
 </p>
 
+<p align="center">
+  <a href="https://github.com/ff0l/Roblox-external/releases/latest"><b>Download the compiled Windows release</b></a>
+</p>
+
+Unpack the zip and run <code>ff0l.exe</code>. Keep the <code>assets</code> folder next to it.
+
 ---
 
 ## Preview
