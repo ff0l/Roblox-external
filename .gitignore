@@ -1,0 +1,8 @@
+/build/
+/.vs/
+/out/
+/.serena/
+/media/frames/
+CMakeUserPresets.json
+*.user
+*.log
