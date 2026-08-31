@@ -13,6 +13,7 @@ namespace config {
 
 static std::unordered_map< std::string, std::string > Values;
 static std::string AppDir;
+static std::string AssetRoot;
 
 static std::string Trim( const std::string& Text ) {
     size_t Start = 0;
@@ -100,12 +101,18 @@ void set( const char* Key, const char* Value ) {
     Values[ Key ? Key : "" ] = Value ? Value : "";
 }
 
+void set_asset_root( const char* Path ) {
+    AssetRoot = Path ? Path : "";
+}
+
 std::string app_dir( ) {
     return AppDir;
 }
 
 std::string asset( const char* Relative ) {
     std::vector< std::string > Roots;
+    if ( !AssetRoot.empty( ) )
+        Roots.push_back( AssetRoot );
     Roots.push_back( AppDir );
     Roots.push_back( AppDir + "\\.." );
     Roots.push_back( AppDir + "\\..\\.." );

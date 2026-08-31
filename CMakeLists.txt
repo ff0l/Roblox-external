@@ -1,6 +1,6 @@
 cmake_minimum_required( VERSION 3.20 )
 
-project( ff0l LANGUAGES CXX )
+project( ff0l LANGUAGES CXX RC )
 
 set( CMAKE_CXX_STANDARD 20 )
 set( CMAKE_CXX_STANDARD_REQUIRED ON )
@@ -20,7 +20,29 @@ endif( )
 
 add_subdirectory( "${UR_ROOT}" "${CMAKE_BINARY_DIR}/ur" )
 
-add_executable( ff0l WIN32 src/Main.cpp )
+foreach( _ff0l_font IN ITEMS
+    "${FONT_DIR}/Poppins-Regular.ttf"
+    "${FONT_DIR}/Poppins-Medium.ttf"
+    "${FONT_DIR}/Poppins-SemiBold.ttf"
+    "${FONT_DIR}/fa-solid-900.woff2"
+    "${FONT_DIR}/fa-regular-400.woff2"
+    "${FONT_DIR}/fa-light-300.woff2" )
+    if( NOT EXISTS "${_ff0l_font}" )
+        message( FATAL_ERROR "Missing embed file ${_ff0l_font}" )
+    endif( )
+endforeach( )
+
+set( FONT_POPPINS_REGULAR  "${FONT_DIR}/Poppins-Regular.ttf" )
+set( FONT_POPPINS_MEDIUM   "${FONT_DIR}/Poppins-Medium.ttf" )
+set( FONT_POPPINS_SEMIBOLD "${FONT_DIR}/Poppins-SemiBold.ttf" )
+set( FONT_FA_SOLID         "${FONT_DIR}/fa-solid-900.woff2" )
+set( FONT_FA_REGULAR       "${FONT_DIR}/fa-regular-400.woff2" )
+set( FONT_FA_LIGHT         "${FONT_DIR}/fa-light-300.woff2" )
+configure_file( src/ff0l.rc.in "${CMAKE_CURRENT_BINARY_DIR}/ff0l.rc" @ONLY )
+
+set( CMAKE_RC_FLAGS "${CMAKE_RC_FLAGS} /I\"${CMAKE_CURRENT_SOURCE_DIR}/src\"" )
+
+add_executable( ff0l WIN32 src/Main.cpp "${CMAKE_CURRENT_BINARY_DIR}/ff0l.rc" )
 target_link_libraries( ff0l PRIVATE ur winhttp )
 target_include_directories( ff0l PRIVATE src )
 

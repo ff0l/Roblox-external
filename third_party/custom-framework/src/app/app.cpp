@@ -111,6 +111,13 @@ static bool StartHost( int Index ) {
 }
 
 static bool PickHost( Backend Wanted ) {
+    if ( Active.overlay ) {
+        if ( StartHost( ( int )Backend::DX11 ) )
+            return true;
+        Context->Report( "Overlay needs DirectX 11" );
+        return false;
+    }
+
     if ( Wanted != Backend::Auto ) {
         int Index = ( int )Wanted;
         if ( StartHost( Index ) )
@@ -349,13 +356,19 @@ int run( const Config& Wanted, std::function< void( ) > User ) {
 
     if ( Active.overlay && Overlay.borderless ) {
         WindowStyle = WS_POPUP;
-        ExtraStyle |= WS_EX_TOOLWINDOW;
+        ExtraStyle |= WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE;
         if ( Overlay.topmost )
             ExtraStyle |= WS_EX_TOPMOST;
-        AnchorLeft = 0;
-        AnchorTop = 0;
-        FullWidth = GetSystemMetrics( SM_CXSCREEN );
-        FullHeight = GetSystemMetrics( SM_CYSCREEN );
+        if ( Overlay.click_through )
+            ExtraStyle |= WS_EX_TRANSPARENT;
+        AnchorLeft = GetSystemMetrics( SM_XVIRTUALSCREEN );
+        AnchorTop = GetSystemMetrics( SM_YVIRTUALSCREEN );
+        FullWidth = GetSystemMetrics( SM_CXVIRTUALSCREEN );
+        FullHeight = GetSystemMetrics( SM_CYVIRTUALSCREEN );
+        if ( FullWidth < 8 )
+            FullWidth = GetSystemMetrics( SM_CXSCREEN );
+        if ( FullHeight < 8 )
+            FullHeight = GetSystemMetrics( SM_CYSCREEN );
     } else {
         RECT Frame = { 0, 0, Active.width, Active.height };
         AdjustWindowRect( &Frame, WS_OVERLAPPEDWINDOW, FALSE );

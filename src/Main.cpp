@@ -13,6 +13,7 @@
 #include <string>
 
 #include "catalog.hpp"
+#include "bundle.hpp"
 #include "store.hpp"
 #include "offsets.hpp"
 #include "world.hpp"
@@ -3636,47 +3637,13 @@ static void Tick( ) {
     Pace( );
 }
 
-static bool LoadFace( const char* Path ) {
-    if ( AddFontResourceExA( Path, FR_PRIVATE, nullptr ) <= 0 )
-        return false;
-    if ( !FaceHandle ) {
-        lstrcpynA( FacePath, Path, MAX_PATH );
+static void BindFace( ) {
+    bundle::Boot( );
+    const std::string Regular = ur::config::asset( "assets\\fonts\\Poppins-Regular.ttf" );
+    if ( Regular.size( ) && AddFontResourceExA( Regular.c_str( ), FR_PRIVATE, nullptr ) > 0 ) {
+        lstrcpynA( FacePath, Regular.c_str( ), MAX_PATH );
         FaceHandle = ( HANDLE )1;
     }
-    return true;
-}
-
-static void BindFace( ) {
-    const char* Library[ ] = {
-        "C:\\repos\\etc\\icon library\\typefaces\\poppins\\Poppins-Regular.ttf",
-        "C:\\repos\\etc\\icon library\\typefaces\\poppins\\Poppins-Medium.ttf",
-        "C:\\repos\\etc\\icon library\\typefaces\\poppins\\Poppins-SemiBold.ttf"
-    };
-
-    char Module[ MAX_PATH ] = { };
-    GetModuleFileNameA( nullptr, Module, MAX_PATH );
-    std::string Folder = Module;
-    size_t Slash = Folder.find_last_of( "\\/" );
-    if ( Slash != std::string::npos )
-        Folder = Folder.substr( 0, Slash ) + "\\assets\\fonts\\";
-    else
-        Folder = "assets\\fonts\\";
-
-    const char* Local[ ] = {
-        "Poppins-Regular.ttf",
-        "Poppins-Medium.ttf",
-        "Poppins-SemiBold.ttf"
-    };
-
-    bool Ready = false;
-    for ( const char* Path : Library )
-        Ready = LoadFace( Path ) || Ready;
-
-    if ( Ready )
-        return;
-
-    for ( const char* Name : Local )
-        LoadFace( ( Folder + Name ).c_str( ) );
 }
 
 }
@@ -3711,5 +3678,6 @@ int WINAPI WinMain( HINSTANCE, HINSTANCE, LPSTR, int ) {
     TitleFace.Destroy( );
     if ( FaceHandle && FacePath[ 0 ] )
         RemoveFontResourceExA( FacePath, FR_PRIVATE, nullptr );
+    bundle::Shutdown( );
     return Code;
 }

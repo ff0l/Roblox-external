@@ -14,6 +14,7 @@ struct Options {
 
 void apply( void* window, const Options& options );
 void attach( void* window );
+void seal( void* window );
 bool glass( );
 
 }
