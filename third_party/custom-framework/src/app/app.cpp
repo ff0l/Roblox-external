@@ -361,14 +361,7 @@ int run( const Config& Wanted, std::function< void( ) > User ) {
             ExtraStyle |= WS_EX_TOPMOST;
         if ( Overlay.click_through )
             ExtraStyle |= WS_EX_TRANSPARENT;
-        AnchorLeft = GetSystemMetrics( SM_XVIRTUALSCREEN );
-        AnchorTop = GetSystemMetrics( SM_YVIRTUALSCREEN );
-        FullWidth = GetSystemMetrics( SM_CXVIRTUALSCREEN );
-        FullHeight = GetSystemMetrics( SM_CYVIRTUALSCREEN );
-        if ( FullWidth < 8 )
-            FullWidth = GetSystemMetrics( SM_CXSCREEN );
-        if ( FullHeight < 8 )
-            FullHeight = GetSystemMetrics( SM_CYSCREEN );
+        overlay::primary_monitor( AnchorLeft, AnchorTop, FullWidth, FullHeight );
     } else {
         RECT Frame = { 0, 0, Active.width, Active.height };
         AdjustWindowRect( &Frame, WS_OVERLAPPEDWINDOW, FALSE );
@@ -378,7 +371,7 @@ int run( const Config& Wanted, std::function< void( ) > User ) {
         AnchorTop = ( GetSystemMetrics( SM_CYSCREEN ) - FullHeight ) / 2;
     }
 
-    if ( Active.overlay && ( Overlay.layered || Overlay.transparent || Overlay.click_through || Overlay.alpha < 255 ) )
+    if ( Active.overlay && !Overlay.transparent && ( Overlay.layered || Overlay.click_through || Overlay.alpha < 255 ) )
         ExtraStyle |= WS_EX_LAYERED;
 
     int TitleCount = MultiByteToWideChar( CP_UTF8, 0, Active.title ? Active.title : "UR", -1, nullptr, 0 );

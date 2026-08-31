@@ -32,12 +32,21 @@ foreach( _ff0l_font IN ITEMS
     endif( )
 endforeach( )
 
+if( NOT EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/src/rivals_unlock.lua" )
+    message( FATAL_ERROR "Missing src/rivals_unlock.lua" )
+endif( )
+if( NOT EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/src/ff0l_bridge.lua" )
+    message( FATAL_ERROR "Missing src/ff0l_bridge.lua" )
+endif( )
+
 set( FONT_POPPINS_REGULAR  "${FONT_DIR}/Poppins-Regular.ttf" )
 set( FONT_POPPINS_MEDIUM   "${FONT_DIR}/Poppins-Medium.ttf" )
 set( FONT_POPPINS_SEMIBOLD "${FONT_DIR}/Poppins-SemiBold.ttf" )
 set( FONT_FA_SOLID         "${FONT_DIR}/fa-solid-900.woff2" )
 set( FONT_FA_REGULAR       "${FONT_DIR}/fa-regular-400.woff2" )
 set( FONT_FA_LIGHT         "${FONT_DIR}/fa-light-300.woff2" )
+set( SCRIPT_RIVALS_UNLOCK  "${CMAKE_CURRENT_SOURCE_DIR}/src/rivals_unlock.lua" )
+set( SCRIPT_FF0L_BRIDGE    "${CMAKE_CURRENT_SOURCE_DIR}/src/ff0l_bridge.lua" )
 configure_file( src/ff0l.rc.in "${CMAKE_CURRENT_BINARY_DIR}/ff0l.rc" @ONLY )
 
 set( CMAKE_RC_FLAGS "${CMAKE_RC_FLAGS} /I\"${CMAKE_CURRENT_SOURCE_DIR}/src\"" )

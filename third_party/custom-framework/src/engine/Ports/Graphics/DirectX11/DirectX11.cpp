@@ -7,6 +7,7 @@
 #include "Context.h"
 #include "Shaders.h"
 #include "DirectX11.h"
+#include "ur/overlay.hpp"
 
 #pragma comment( lib, "d3d11.lib" )
 #pragma comment( lib, "d3dcompiler.lib" )
@@ -91,6 +92,9 @@ bool CDirectEleven::Create( ID3D11Device* Device, ID3D11DeviceContext* Orders ) 
     Mixing.RenderTarget[ 0 ].RenderTargetWriteMask = D3D11_COLOR_WRITE_ENABLE_ALL;
     Hardware->CreateBlendState( &Mixing, &Blending );
 
+    Mixing.RenderTarget[ 0 ].SrcBlend = D3D11_BLEND_ONE;
+    Hardware->CreateBlendState( &Mixing, &GlassBlending );
+
     D3D11_RASTERIZER_DESC Shaping = { };
 
     Shaping.FillMode = D3D11_FILL_SOLID;
@@ -118,7 +122,7 @@ bool CDirectEleven::Create( ID3D11Device* Device, ID3D11DeviceContext* Orders ) 
     Slot.BindFlags = D3D11_BIND_CONSTANT_BUFFER;
     Hardware->CreateBuffer( &Slot, nullptr, &Constants );
 
-    if ( !Blending || !Rasterizer || !Sampler || !Constants ) {
+    if ( !Blending || !GlassBlending || !Rasterizer || !Sampler || !Constants ) {
         Destroy( );
         return false;
     }
@@ -174,6 +178,11 @@ void CDirectEleven::Destroy( ) {
     if ( Blending ) {
         Blending->Release( );
         Blending = nullptr;
+    }
+
+    if ( GlassBlending ) {
+        GlassBlending->Release( );
+        GlassBlending = nullptr;
     }
 
     if ( VertexStage ) {
@@ -426,7 +435,7 @@ void CDirectEleven::Bind( const CDrawData& Data ) {
     Commands->PSSetConstantBuffers( 0, 1, &Constants );
 
     Commands->PSSetSamplers( 0, 1, &Sampler );
-    Commands->OMSetBlendState( Blending, nullptr, 0xffffffff );
+    Commands->OMSetBlendState( ur::overlay::glass( ) ? GlassBlending : Blending, nullptr, 0xffffffff );
 }
 
 void CDirectEleven::Render( const CDrawData& Data, void* Stream ) {
@@ -521,7 +530,7 @@ void CDirectEleven::Render( const CDrawData& Data, void* Stream ) {
         float Values[ 12 ] = {
             2.0f / Data.Extent.Horizontal, -2.0f / Data.Extent.Vertical, -1.0f, 1.0f,
             0.0f, Data.Moment, Data.Mouse.Horizontal, Data.Mouse.Vertical,
-            Data.PressLeft, Data.PressRight, 0.0f, 0.0f
+            Data.PressLeft, Data.PressRight, ur::overlay::glass( ) ? 1.0f : 0.0f, 0.0f
         };
         ( ( unsigned int* )Values )[ 4 ] = ( unsigned int )Batch.Offset;
 

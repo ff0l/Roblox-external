@@ -21,28 +21,25 @@ static Options Last{ };
 static HWND LastHandle = nullptr;
 static bool HaveLast = false;
 
-static void CoverDesktop( int& Left, int& Top, int& Width, int& Height ) {
-    Left = GetSystemMetrics( SM_XVIRTUALSCREEN );
-    Top = GetSystemMetrics( SM_YVIRTUALSCREEN );
-    Width = GetSystemMetrics( SM_CXVIRTUALSCREEN );
-    Height = GetSystemMetrics( SM_CYVIRTUALSCREEN );
-    if ( Width < 8 )
-        Width = GetSystemMetrics( SM_CXSCREEN );
-    if ( Height < 8 )
-        Height = GetSystemMetrics( SM_CYSCREEN );
+static void CoverPrimary( int& Left, int& Top, int& Width, int& Height ) {
+    HMONITOR Monitor = MonitorFromPoint( POINT{ 0, 0 }, MONITOR_DEFAULTTOPRIMARY );
+    MONITORINFO Info = { sizeof( Info ) };
+    if ( Monitor && GetMonitorInfo( Monitor, &Info ) ) {
+        Left = Info.rcMonitor.left;
+        Top = Info.rcMonitor.top;
+        Width = Info.rcMonitor.right - Info.rcMonitor.left;
+        Height = Info.rcMonitor.bottom - Info.rcMonitor.top;
+        return;
+    }
+    Left = 0;
+    Top = 0;
+    Width = GetSystemMetrics( SM_CXSCREEN );
+    Height = GetSystemMetrics( SM_CYSCREEN );
 }
 
 static void GlassFrame( HWND Handle ) {
     MARGINS Glass = { -1, -1, -1, -1 };
     DwmExtendFrameIntoClientArea( Handle, &Glass );
-
-    DWM_BLURBEHIND Behind = { };
-    Behind.dwFlags = DWM_BB_ENABLE | DWM_BB_BLURREGION;
-    Behind.fEnable = TRUE;
-    Behind.hRgnBlur = CreateRectRgn( 0, 0, -1, -1 );
-    DwmEnableBlurBehindWindow( Handle, &Behind );
-    if ( Behind.hRgnBlur )
-        DeleteObject( Behind.hRgnBlur );
 }
 
 void apply( void* Window, const Options& Options ) {
@@ -89,13 +86,14 @@ void apply( void* Window, const Options& Options ) {
         Extra |= WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE;
     }
 
-    if ( Options.layered || Options.click_through || ( !Options.transparent && Options.alpha < 255 ) )
-        Extra |= WS_EX_LAYERED;
-    else if ( !Options.transparent )
-        Extra &= ~WS_EX_LAYERED;
-
     if ( Options.transparent ) {
+        Extra &= ~WS_EX_LAYERED;
+        Extra |= WS_EX_NOREDIRECTIONBITMAP;
+    } else if ( Options.layered || Options.click_through || Options.alpha < 255 ) {
         Extra |= WS_EX_LAYERED;
+        Extra &= ~WS_EX_NOREDIRECTIONBITMAP;
+    } else {
+        Extra &= ~WS_EX_LAYERED;
         Extra &= ~WS_EX_NOREDIRECTIONBITMAP;
     }
 
@@ -125,7 +123,7 @@ void apply( void* Window, const Options& Options ) {
     int Width = 0;
     int Height = 0;
     if ( Options.borderless ) {
-        CoverDesktop( Left, Top, Width, Height );
+        CoverPrimary( Left, Top, Width, Height );
     } else {
         Place |= SWP_NOMOVE | SWP_NOSIZE;
     }
@@ -142,6 +140,10 @@ void seal( void* Window ) {
 
 bool glass( ) {
     return HaveLast && Last.transparent;
+}
+
+void primary_monitor( int& left, int& top, int& width, int& height ) {
+    CoverPrimary( left, top, width, height );
 }
 
 void attach( void* Window ) {

@@ -16,6 +16,7 @@ void apply( void* window, const Options& options );
 void attach( void* window );
 void seal( void* window );
 bool glass( );
+void primary_monitor( int& left, int& top, int& width, int& height );
 
 }
 }

@@ -31,6 +31,7 @@ cbuffer CScreen : register( b0 )
     float Moment;
     float2 Mouse;
     float2 Press;
+    float Glass;
 };
 
 struct CFragment
@@ -89,6 +90,7 @@ cbuffer CScreen : register( b0 )
     float Moment;
     float2 Mouse;
     float2 Press;
+    float Glass;
 };
 
 struct CFragment
@@ -244,6 +246,8 @@ float4 MainFragment( CFragment Fragment ) : SV_Target
     }
 
     /*UR_EFFECT*/
+    if ( Glass > 0.5 )
+        Final.rgb *= Final.a;
     return Final;
 }
 )";

@@ -55,6 +55,7 @@ private:
     std::vector< ID3D11PixelShader* > Stages;
 
     ID3D11BlendState* Blending = nullptr;
+    ID3D11BlendState* GlassBlending = nullptr;
     ID3D11RasterizerState* Rasterizer = nullptr;
 
     ID3D11SamplerState* Sampler = nullptr;
