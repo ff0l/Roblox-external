@@ -5,13 +5,9 @@
 
 #include <Windows.h>
 #include <dwmapi.h>
-#include <wingdi.h>
 
 #ifndef DWMWA_USE_IMMERSIVE_DARK_MODE
 #define DWMWA_USE_IMMERSIVE_DARK_MODE 20
-#endif
-#ifndef WS_EX_NOREDIRECTIONBITMAP
-#define WS_EX_NOREDIRECTIONBITMAP 0x00200000L
 #endif
 
 namespace ur {
@@ -42,6 +38,16 @@ static void GlassFrame( HWND Handle ) {
     DwmExtendFrameIntoClientArea( Handle, &Glass );
 }
 
+static void PassClicks( HWND Handle, bool Through ) {
+    LONG Extra = GetWindowLongW( Handle, GWL_EXSTYLE );
+    if ( Through )
+        Extra |= WS_EX_TRANSPARENT;
+    else
+        Extra &= ~WS_EX_TRANSPARENT;
+    SetWindowLongW( Handle, GWL_EXSTYLE, Extra );
+    SetWindowPos( Handle, nullptr, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE | SWP_FRAMECHANGED );
+}
+
 void apply( void* Window, const Options& Options ) {
     HWND Handle = ( HWND )Window;
     if ( !Handle )
@@ -64,12 +70,7 @@ void apply( void* Window, const Options& Options ) {
         && Last.alpha == Options.alpha
         && Last.click_through != Options.click_through ) {
         Last.click_through = Options.click_through;
-        LONG Extra = GetWindowLongW( Handle, GWL_EXSTYLE );
-        if ( Options.click_through )
-            Extra |= WS_EX_TRANSPARENT;
-        else
-            Extra &= ~WS_EX_TRANSPARENT;
-        SetWindowLongW( Handle, GWL_EXSTYLE, Extra );
+        PassClicks( Handle, Options.click_through );
         return;
     }
 
@@ -83,19 +84,13 @@ void apply( void* Window, const Options& Options ) {
     if ( Options.borderless ) {
         Style &= ~( WS_CAPTION | WS_THICKFRAME | WS_MINIMIZEBOX | WS_MAXIMIZEBOX | WS_SYSMENU );
         Style |= WS_POPUP;
-        Extra |= WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE;
+        Extra |= WS_EX_TOOLWINDOW;
     }
 
-    if ( Options.transparent ) {
-        Extra &= ~WS_EX_LAYERED;
-        Extra |= WS_EX_NOREDIRECTIONBITMAP;
-    } else if ( Options.layered || Options.click_through || Options.alpha < 255 ) {
+    if ( Options.layered || Options.transparent || Options.click_through || Options.alpha < 255 )
         Extra |= WS_EX_LAYERED;
-        Extra &= ~WS_EX_NOREDIRECTIONBITMAP;
-    } else {
+    else
         Extra &= ~WS_EX_LAYERED;
-        Extra &= ~WS_EX_NOREDIRECTIONBITMAP;
-    }
 
     if ( Options.click_through )
         Extra |= WS_EX_TRANSPARENT;
@@ -113,6 +108,8 @@ void apply( void* Window, const Options& Options ) {
 
     if ( Options.transparent ) {
         GlassFrame( Handle );
+        if ( Extra & WS_EX_LAYERED )
+            SetLayeredWindowAttributes( Handle, 0, ( BYTE )Alpha, LWA_ALPHA );
     } else if ( Extra & WS_EX_LAYERED ) {
         SetLayeredWindowAttributes( Handle, 0, ( BYTE )Alpha, LWA_ALPHA );
     }
@@ -136,6 +133,15 @@ void seal( void* Window ) {
     if ( !Handle || !Last.transparent )
         return;
     GlassFrame( Handle );
+    if ( Last.layered || Last.transparent || Last.click_through || Last.alpha < 255 ) {
+        int Alpha = Last.alpha;
+        if ( Alpha < 0 )
+            Alpha = 0;
+        if ( Alpha > 255 )
+            Alpha = 255;
+        SetLayeredWindowAttributes( Handle, 0, ( BYTE )Alpha, LWA_ALPHA );
+    }
+    PassClicks( Handle, Last.click_through );
 }
 
 bool glass( ) {

@@ -13,8 +13,6 @@
 #include <string>
 
 #include "catalog.hpp"
-#include "bundle.hpp"
-#include "unlock.hpp"
 #include "store.hpp"
 #include "offsets.hpp"
 #include "world.hpp"
@@ -68,7 +66,7 @@ struct Shell {
     CVector grab;
     bool ready = false;
     bool painted = false;
-    bool visible = false;
+    bool visible = true;
     bool held = false;
     bool mouse = false;
     bool escape = false;
@@ -118,7 +116,6 @@ struct Combat {
 struct Fury {
     bool jump = false;
     bool noclip = false;
-    bool unlock = false;
 };
 
 struct Quiet {
@@ -388,7 +385,6 @@ static void OpenLiveFolds( ) {
     Aim.targeting = Aim.on;
     Rage.jump = move::Live( ).jump || move::Live( ).infJump;
     Rage.noclip = move::Live( ).noclip;
-    Rage.unlock = unlock::Live( ).on;
     Mute.fold = Mute.on;
     Esp.overlay = Esp.on;
     Esp.visual = Esp.skeleton || Esp.snap;
@@ -1416,7 +1412,6 @@ struct PageFit {
     float silent;
     float rageJump;
     float rageNoclip;
-    float rageUnlock;
     float overlay;
     float visual;
     float theme;
@@ -1436,7 +1431,6 @@ static PageFit FitOf( float Scale ) {
     Fit.target = ( 276.0f + ( Aim.drawFov ? 32.0f : 0.0f ) ) * Scale;
     Fit.rageJump = 128.0f * Scale;
     Fit.rageNoclip = 58.0f * Scale;
-    Fit.rageUnlock = 72.0f * Scale;
     Fit.overlay = 232.0f * Scale;
     Fit.visual = 88.0f * Scale;
     Fit.theme = 228.0f * Scale;
@@ -1536,18 +1530,6 @@ static bool DrawRageNoclip( const CRectangle& Body, const CVector& Point, bool C
     return DrawSwitch( First, "Enabled", "move.noclip", Move.noclip, Point, Click, Scale );
 }
 
-static bool DrawRageUnlock( const CRectangle& Body, const CVector& Point, bool Click, float Scale ) {
-    unlock::Cfg& Unlock = unlock::Live( );
-    float Left = Body.Left + 14.0f * Scale;
-    float Wide = Body.Width - 28.0f * Scale;
-    float Top = Body.Top + 12.0f * Scale;
-    bool Busy = DrawSwitch( CRectangle( Left, Top, Wide, 32.0f * Scale ), "Enabled", "unlock.on", Unlock.on, Point, Click, Scale );
-    const char* Note = unlock::Status( );
-    if ( Note && Note[ 0 ] )
-        Canvas->Text( CVector( Left, Top + 38.0f * Scale ), Dress.faint, Note );
-    return Busy;
-}
-
 static bool DrawRage( const CRectangle& Content, const CVector& Point, bool Click, bool Press, float Scale, float Ease ) {
     float Keep = Canvas->Opacity;
     Canvas->Opacity = Keep * Ease;
@@ -1581,20 +1563,6 @@ static bool DrawRage( const CRectangle& Content, const CVector& Point, bool Clic
         Canvas->Opacity = Amount * OpenClip;
         Canvas->PushClip( CRectangle( Right, Top, Wide, Head + Fit.rageNoclip * OpenClip ) );
         Busy = DrawRageNoclip( Body, Point, Click, Scale ) || Busy;
-        Canvas->PopClip( );
-        Canvas->Opacity = Amount;
-    }
-
-    float UnlockTop = Top + ( Head + Fit.rageJump * OpenJump > Head + Fit.rageNoclip * OpenClip
-        ? Head + Fit.rageJump * OpenJump
-        : Head + Fit.rageNoclip * OpenClip ) + Gap;
-    float OpenUnlock = 0.0f;
-    Busy = DrawFold( Left, UnlockTop, Content.Width - Inset * 2.0f, Head, Fit.rageUnlock, Round, Scale, "Unlock All", "fold.rage.unlock", Rage.unlock, Point, Click, Body, OpenUnlock ) || Busy;
-    if ( OpenUnlock > 0.08f ) {
-        float Amount = Canvas->Opacity;
-        Canvas->Opacity = Amount * OpenUnlock;
-        Canvas->PushClip( CRectangle( Left, UnlockTop, Content.Width - Inset * 2.0f, Head + Fit.rageUnlock * OpenUnlock ) );
-        Busy = DrawRageUnlock( Body, Point, Click, Scale ) || Busy;
         Canvas->PopClip( );
         Canvas->Opacity = Amount;
     }
@@ -1819,7 +1787,6 @@ static void PackState( char* Out, int Cap ) {
         PackPut( Out, Cap, "move.infJump", Move.infJump ? 1 : 0 );
         PackPut( Out, Cap, "move.noclip", Move.noclip ? 1 : 0 );
     }
-    PackPut( Out, Cap, "unlock.on", unlock::Live( ).on ? 1 : 0 );
     PackPut( Out, Cap, "esp.on", Esp.on ? 1 : 0 );
     PackPut( Out, Cap, "esp.box", Esp.box ? 1 : 0 );
     PackPut( Out, Cap, "esp.name", Esp.name ? 1 : 0 );
@@ -1889,7 +1856,6 @@ static void ApplyState( const char* Body ) {
         store::TakeB( Body, "move.noclip", Move.noclip );
         move::Clamp( );
     }
-    store::TakeB( Body, "unlock.on", unlock::Live( ).on );
     store::TakeB( Body, "esp.on", Esp.on );
     store::TakeB( Body, "esp.box", Esp.box );
     store::TakeB( Body, "esp.name", Esp.name );
@@ -3568,7 +3534,6 @@ static void TickMenuMouse( ) {
         ClipCursor( nullptr );
         Freed = true;
     }
-    ur::app::overlay_options( ).click_through = !Menu.visible;
 }
 
 static void Tick( ) {
@@ -3581,7 +3546,6 @@ static void Tick( ) {
     TickMenuMouse( );
     TickAim( Style->Scale > 0.0f ? Style->Scale : 1.0f );
     move::Tick( Context->DeltaTime, Menu.listen || Aim.listen || Mute.listen );
-    unlock::Tick( );
     if ( !Mute.on )
         silent::Remove( );
     if ( Tree.open ) {
@@ -3671,13 +3635,34 @@ static void Tick( ) {
     Pace( );
 }
 
-static void BindFace( ) {
-    bundle::Boot( );
-    const std::string Regular = ur::config::asset( "assets\\fonts\\Poppins-Regular.ttf" );
-    if ( Regular.size( ) && AddFontResourceExA( Regular.c_str( ), FR_PRIVATE, nullptr ) > 0 ) {
-        lstrcpynA( FacePath, Regular.c_str( ), MAX_PATH );
+static bool LoadFace( const char* Path ) {
+    if ( AddFontResourceExA( Path, FR_PRIVATE, nullptr ) <= 0 )
+        return false;
+    if ( !FaceHandle ) {
+        lstrcpynA( FacePath, Path, MAX_PATH );
         FaceHandle = ( HANDLE )1;
     }
+    return true;
+}
+
+static void BindFace( ) {
+    char Module[ MAX_PATH ] = { };
+    GetModuleFileNameA( nullptr, Module, MAX_PATH );
+    std::string Folder = Module;
+    size_t Slash = Folder.find_last_of( "\\/" );
+    if ( Slash != std::string::npos )
+        Folder = Folder.substr( 0, Slash ) + "\\assets\\fonts\\";
+    else
+        Folder = "assets\\fonts\\";
+
+    const char* Local[ ] = {
+        "Poppins-Regular.ttf",
+        "Poppins-Medium.ttf",
+        "Poppins-SemiBold.ttf"
+    };
+
+    for ( const char* Name : Local )
+        LoadFace( ( Folder + Name ).c_str( ) );
 }
 
 }
@@ -3689,6 +3674,7 @@ int WINAPI WinMain( HINSTANCE, HINSTANCE, LPSTR, int ) {
     Overlay.topmost = true;
     Overlay.borderless = true;
     Overlay.transparent = true;
+    Overlay.layered = true;
     Overlay.click_through = true;
     Overlay.alpha = 255;
 
@@ -3711,6 +3697,5 @@ int WINAPI WinMain( HINSTANCE, HINSTANCE, LPSTR, int ) {
     TitleFace.Destroy( );
     if ( FaceHandle && FacePath[ 0 ] )
         RemoveFontResourceExA( FacePath, FR_PRIVATE, nullptr );
-    bundle::Shutdown( );
     return Code;
 }

@@ -19,7 +19,7 @@
   <a href="https://github.com/ff0l/Roblox-external/archive/refs/heads/main.zip"><b>Source</b></a>
 </p>
 
-Download <code>ff0l.exe</code> and run it. Fonts and icons are embedded — no extra folder is required. The source tree already includes the UI framework and fonts — run <code>build.bat</code> to compile.
+Unpack the release zip and run <code>ff0l.exe</code>. Keep the <code>assets</code> folder next to it. The source tree already includes the UI framework and fonts — run <code>build.bat</code> to compile.
 
 ---
 
@@ -170,7 +170,7 @@ Output: `build\windows-release\ff0l.exe` (or `build\windows-debug\ff0l.exe`). Th
 
 ```
 build.bat           one-click compile
-assets/             themes and extras (fonts/icons are compiled into the exe)
+assets/             fonts, icons, themes (copied next to the built exe)
 src/                overlay, aim, ESP, configs
 third_party/custom-framework   bundled UI library
 third_party/fonts              Poppins + Font Awesome

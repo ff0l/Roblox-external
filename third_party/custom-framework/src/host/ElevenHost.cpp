@@ -9,19 +9,9 @@
 #include "ElevenHost.h"
 #include "ur/overlay.hpp"
 
-#ifndef WS_EX_NOREDIRECTIONBITMAP
-#define WS_EX_NOREDIRECTIONBITMAP 0x00200000L
-#endif
-
-static bool MakeSwap( IDXGIFactory2* Factory, ID3D11Device* Hardware, HWND Window, const DXGI_SWAP_CHAIN_DESC1& Description, IDXGISwapChain1** Out ) {
-    *Out = nullptr;
-    return SUCCEEDED( Factory->CreateSwapChainForHwnd( Hardware, Window, &Description, nullptr, nullptr, Out ) ) && *Out;
-}
-
 bool CElevenHost::Create( void* Window, int Width, int Height ) {
     Destroy( );
 
-    HWND Handle = ( HWND )Window;
     D3D_FEATURE_LEVEL Wanted = D3D_FEATURE_LEVEL_11_0;
     UINT DeviceFlags = D3D11_CREATE_DEVICE_BGRA_SUPPORT;
     if ( FAILED( D3D11CreateDevice( nullptr, D3D_DRIVER_TYPE_HARDWARE, nullptr, DeviceFlags, &Wanted, 1, D3D11_SDK_VERSION, &Hardware, nullptr, &Commands ) ) ) {
@@ -70,45 +60,12 @@ bool CElevenHost::Create( void* Window, int Width, int Height ) {
     Description.SampleDesc.Count = 1;
     Description.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT;
     Description.Flags = SwapOptions;
+    Description.BufferCount = Glass ? 1u : 2u;
+    Description.SwapEffect = Glass ? DXGI_SWAP_EFFECT_DISCARD : DXGI_SWAP_EFFECT_FLIP_DISCARD;
+    Description.AlphaMode = DXGI_ALPHA_MODE_UNSPECIFIED;
 
-    LONG Extra = GetWindowLongW( Handle, GWL_EXSTYLE );
-    HRESULT Outcome = E_FAIL;
-
-    if ( Glass ) {
-        Description.BufferCount = 2;
-        Description.SwapEffect = DXGI_SWAP_EFFECT_FLIP_DISCARD;
-        Description.AlphaMode = DXGI_ALPHA_MODE_PREMULTIPLIED;
-        SetWindowLongW( Handle, GWL_EXSTYLE, Extra | WS_EX_NOREDIRECTIONBITMAP );
-        if ( MakeSwap( Factory, Hardware, Handle, Description, &Swapchain ) ) {
-            Outcome = S_OK;
-        } else {
-            SetWindowLongW( Handle, GWL_EXSTYLE, Extra );
-            Description.SwapEffect = DXGI_SWAP_EFFECT_FLIP_SEQUENTIAL;
-            if ( MakeSwap( Factory, Hardware, Handle, Description, &Swapchain ) ) {
-                SetWindowLongW( Handle, GWL_EXSTYLE, Extra | WS_EX_NOREDIRECTIONBITMAP );
-                Outcome = S_OK;
-            } else {
-                Description.BufferCount = 1;
-                Description.SwapEffect = DXGI_SWAP_EFFECT_DISCARD;
-                Description.AlphaMode = DXGI_ALPHA_MODE_PREMULTIPLIED;
-                if ( MakeSwap( Factory, Hardware, Handle, Description, &Swapchain ) )
-                    Outcome = S_OK;
-                else {
-                    Description.AlphaMode = DXGI_ALPHA_MODE_UNSPECIFIED;
-                    if ( MakeSwap( Factory, Hardware, Handle, Description, &Swapchain ) )
-                        Outcome = S_OK;
-                }
-            }
-        }
-    } else {
-        Description.BufferCount = 2;
-        Description.SwapEffect = DXGI_SWAP_EFFECT_FLIP_DISCARD;
-        Description.AlphaMode = DXGI_ALPHA_MODE_UNSPECIFIED;
-        if ( MakeSwap( Factory, Hardware, Handle, Description, &Swapchain ) )
-            Outcome = S_OK;
-    }
-
-    Factory->MakeWindowAssociation( Handle, DXGI_MWA_NO_ALT_ENTER );
+    HRESULT Outcome = Factory->CreateSwapChainForHwnd( Hardware, ( HWND )Window, &Description, nullptr, nullptr, &Swapchain );
+    Factory->MakeWindowAssociation( ( HWND )Window, DXGI_MWA_NO_ALT_ENTER );
     Factory->Release( );
     Adapter->Release( );
     if ( Bridge )
@@ -133,7 +90,7 @@ bool CElevenHost::Create( void* Window, int Width, int Height ) {
     }
 
     if ( Glass )
-        ur::overlay::seal( Handle );
+        ur::overlay::seal( ( HWND )Window );
 
     return true;
 }

@@ -140,6 +140,10 @@ static LRESULT CALLBACK ProcessMessage( HWND Origin, UINT Message, WPARAM Primar
         return Message == WM_SETCURSOR ? TRUE : 0;
 
     switch ( Message ) {
+    case WM_NCHITTEST:
+        if ( OverlayReady && Overlay.click_through )
+            return HTTRANSPARENT;
+        break;
     case WM_CLOSE:
         Quit = true;
         return 0;
@@ -356,11 +360,9 @@ int run( const Config& Wanted, std::function< void( ) > User ) {
 
     if ( Active.overlay && Overlay.borderless ) {
         WindowStyle = WS_POPUP;
-        ExtraStyle |= WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE;
+        ExtraStyle |= WS_EX_TOOLWINDOW;
         if ( Overlay.topmost )
             ExtraStyle |= WS_EX_TOPMOST;
-        if ( Overlay.click_through )
-            ExtraStyle |= WS_EX_TRANSPARENT;
         overlay::primary_monitor( AnchorLeft, AnchorTop, FullWidth, FullHeight );
     } else {
         RECT Frame = { 0, 0, Active.width, Active.height };
@@ -371,7 +373,7 @@ int run( const Config& Wanted, std::function< void( ) > User ) {
         AnchorTop = ( GetSystemMetrics( SM_CYSCREEN ) - FullHeight ) / 2;
     }
 
-    if ( Active.overlay && !Overlay.transparent && ( Overlay.layered || Overlay.click_through || Overlay.alpha < 255 ) )
+    if ( Active.overlay && ( Overlay.layered || Overlay.transparent || Overlay.click_through || Overlay.alpha < 255 ) )
         ExtraStyle |= WS_EX_LAYERED;
 
     int TitleCount = MultiByteToWideChar( CP_UTF8, 0, Active.title ? Active.title : "UR", -1, nullptr, 0 );
