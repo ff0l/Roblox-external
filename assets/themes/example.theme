@@ -1,0 +1,8 @@
+# Drop-in color overrides. Load with ur::theme::load_file("assets/themes/example.theme").
+# Values are red green blue [alpha].
+
+accent 99 102 241
+accent_soft 165 180 252
+success 74 222 128
+warning 251 191 36
+danger 240 92 104

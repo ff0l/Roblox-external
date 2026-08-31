@@ -11,7 +11,12 @@ if( NOT WIN32 )
 endif( )
 
 set( UR_BUILD_DEMO OFF CACHE BOOL "" FORCE )
-set( UR_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/../etc/custom-framework" )
+set( UR_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/third_party/custom-framework" )
+set( FONT_DIR "${CMAKE_CURRENT_SOURCE_DIR}/third_party/fonts" )
+
+if( NOT EXISTS "${UR_ROOT}/CMakeLists.txt" )
+    message( FATAL_ERROR "Missing ${UR_ROOT}. The source tree must include third_party/custom-framework." )
+endif( )
 
 add_subdirectory( "${UR_ROOT}" "${CMAKE_BINARY_DIR}/ur" )
 
@@ -27,9 +32,6 @@ set_target_properties( ff0l PROPERTIES
     VS_DEBUGGER_WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
 )
 
-set( ICON_LIB "${CMAKE_CURRENT_SOURCE_DIR}/../etc/icon library" )
-set( FA_FONTS "${ICON_LIB}/icons/ui/v7.3.0/webfonts" )
-
 add_custom_command( TARGET ff0l POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy_directory
         "${UR_ROOT}/assets"
@@ -37,23 +39,29 @@ add_custom_command( TARGET ff0l POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E make_directory
         "$<TARGET_FILE_DIR:ff0l>/assets/icons/fontawesome"
     COMMAND ${CMAKE_COMMAND} -E copy_if_different
-        "${FA_FONTS}/fa-solid-900.woff2"
+        "${FONT_DIR}/fa-solid-900.woff2"
         "$<TARGET_FILE_DIR:ff0l>/assets/icons/fontawesome/fa-solid-900.woff2"
     COMMAND ${CMAKE_COMMAND} -E copy_if_different
-        "${FA_FONTS}/fa-regular-400.woff2"
+        "${FONT_DIR}/fa-regular-400.woff2"
         "$<TARGET_FILE_DIR:ff0l>/assets/icons/fontawesome/fa-regular-400.woff2"
     COMMAND ${CMAKE_COMMAND} -E copy_if_different
-        "${FA_FONTS}/fa-light-300.woff2"
+        "${FONT_DIR}/fa-light-300.woff2"
         "$<TARGET_FILE_DIR:ff0l>/assets/icons/fontawesome/fa-light-300.woff2"
     COMMAND ${CMAKE_COMMAND} -E make_directory
         "$<TARGET_FILE_DIR:ff0l>/assets/fonts"
     COMMAND ${CMAKE_COMMAND} -E copy_if_different
-        "${ICON_LIB}/typefaces/poppins/Poppins-Regular.ttf"
+        "${FONT_DIR}/Poppins-Regular.ttf"
         "$<TARGET_FILE_DIR:ff0l>/assets/fonts/Poppins-Regular.ttf"
     COMMAND ${CMAKE_COMMAND} -E copy_if_different
-        "${ICON_LIB}/typefaces/poppins/Poppins-Medium.ttf"
+        "${FONT_DIR}/Poppins-Medium.ttf"
         "$<TARGET_FILE_DIR:ff0l>/assets/fonts/Poppins-Medium.ttf"
     COMMAND ${CMAKE_COMMAND} -E copy_if_different
-        "${ICON_LIB}/typefaces/poppins/Poppins-SemiBold.ttf"
+        "${FONT_DIR}/Poppins-SemiBold.ttf"
         "$<TARGET_FILE_DIR:ff0l>/assets/fonts/Poppins-SemiBold.ttf"
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+        "$<TARGET_FILE:ff0l>"
+        "${CMAKE_CURRENT_SOURCE_DIR}/ff0l.exe"
+    COMMAND ${CMAKE_COMMAND} -E copy_directory
+        "$<TARGET_FILE_DIR:ff0l>/assets"
+        "${CMAKE_CURRENT_SOURCE_DIR}/assets"
 )
