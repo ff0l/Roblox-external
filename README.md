@@ -14,12 +14,12 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/ff0l/Roblox-external/archive/refs/heads/main.zip"><b>Download source (ready to run)</b></a>
+  <a href="https://github.com/ff0l/Roblox-external/releases/latest"><b>Download the compiled Windows release</b></a>
   ·
-  <a href="https://github.com/ff0l/Roblox-external/releases/latest"><b>Release exe</b></a>
+  <a href="https://github.com/ff0l/Roblox-external/archive/refs/heads/main.zip"><b>Source</b></a>
 </p>
 
-Unpack the source zip and run <code>ff0l.exe</code>. Keep the <code>assets</code> folder next to it. Nothing else to install. The tree already includes the UI framework and fonts.
+Unpack the release zip and run <code>ff0l.exe</code>. Keep the <code>assets</code> folder next to it. The source tree already includes the UI framework and fonts — run <code>build.bat</code> to compile.
 
 ---
 
@@ -145,7 +145,7 @@ Configs save and load from the Configs tab. Each file is a plain text preset und
 
 ## Use
 
-1. Code → Download ZIP, or grab [the source zip](https://github.com/ff0l/Roblox-external/archive/refs/heads/main.zip)
+1. Grab the [compiled release](https://github.com/ff0l/Roblox-external/releases/latest)
 2. Unzip
 3. Run `ff0l.exe`
 
@@ -153,7 +153,7 @@ Configs save and load from the Configs tab. Each file is a plain text preset und
 
 ## Build
 
-The source zip is already runnable. To compile again, double-click `build.bat`.
+The source zip has everything needed to compile. Double-click `build.bat`.
 
 Windows 10 or 11, x64. Visual Studio 2022 or newer with **Desktop development with C++** (CMake is in that workload). No other repos, no extra packages.
 
@@ -162,16 +162,15 @@ build.bat
 build.bat --debug
 ```
 
-`build.bat` writes `ff0l.exe` and refreshes `assets\` in this folder. The UI framework lives in `third_party/custom-framework`. Fonts live in `third_party/fonts`.
+Output: `build\windows-release\ff0l.exe` (or `build\windows-debug\ff0l.exe`). The UI framework lives in `third_party/custom-framework`. Fonts live in `third_party/fonts`.
 
 ---
 
 ## Layout
 
 ```
-ff0l.exe            ready-to-run build
-assets/             fonts, icons, themes (keep next to the exe)
 build.bat           one-click compile
+assets/             fonts, icons, themes (copied next to the built exe)
 src/                overlay, aim, ESP, configs
 third_party/custom-framework   bundled UI library
 third_party/fonts              Poppins + Font Awesome
@@ -185,6 +184,6 @@ media/              README preview, menu clip, in-game clip
 - Windows 10 or 11, 64-bit
 - Roblox (`RobloxPlayerBeta.exe`)
 - Network on first launch so offsets can sync (after that, the cache is enough)
-- Visual Studio only if you run `build.bat` — not required to run the shipped `ff0l.exe`
+- Visual Studio only if you run `build.bat` — not required to run the release exe
 
 **FF0L**.

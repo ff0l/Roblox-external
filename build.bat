@@ -67,13 +67,14 @@ if errorlevel 1 (
     exit /b 1
 )
 
-if not exist "ff0l.exe" (
-    echo Error: ff0l.exe was not written next to build.bat.
+set "OUT=build\%PRESET%\ff0l.exe"
+if not exist "%OUT%" (
+    echo Error: %OUT% was not built.
     exit /b 1
 )
 
-echo Built ff0l.exe
-echo Run: "%~dp0ff0l.exe"
+echo Built %OUT%
+echo Run: "%~dp0%OUT%"
 exit /b 0
 
 :help
@@ -84,5 +85,5 @@ echo Examples:
 echo   build.bat
 echo   build.bat --debug
 echo.
-echo Output: ff0l.exe and assets\ in this folder.
+echo Output: build\windows-release\ff0l.exe
 exit /b 0

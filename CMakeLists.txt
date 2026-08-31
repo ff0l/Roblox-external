@@ -58,10 +58,4 @@ add_custom_command( TARGET ff0l POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy_if_different
         "${FONT_DIR}/Poppins-SemiBold.ttf"
         "$<TARGET_FILE_DIR:ff0l>/assets/fonts/Poppins-SemiBold.ttf"
-    COMMAND ${CMAKE_COMMAND} -E copy_if_different
-        "$<TARGET_FILE:ff0l>"
-        "${CMAKE_CURRENT_SOURCE_DIR}/ff0l.exe"
-    COMMAND ${CMAKE_COMMAND} -E copy_directory
-        "$<TARGET_FILE_DIR:ff0l>/assets"
-        "${CMAKE_CURRENT_SOURCE_DIR}/assets"
 )

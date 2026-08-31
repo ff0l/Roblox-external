@@ -3,6 +3,7 @@
 /out/
 /.serena/
 /media/frames/
+/ff0l.exe
 CMakeUserPresets.json
 *.user
 *.log
