@@ -179,4 +179,4 @@ media/              README preview, menu clip, in-game clip
 - Roblox (`RobloxPlayerBeta.exe`)
 - Network on first launch so offsets can sync (after that, the cache is enough)
 
-FF0L is by **FF0L**.
+**FF0L**.
