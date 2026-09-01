@@ -10,7 +10,8 @@
 </p>
 
 <p align="center">
-  <b>Offsets update automatically</b> on launch — FF0L checks the live Roblox version and pulls a fresh table when the game patches.
+  <b>Offsets update automatically</b> for the Roblox <b>LIVE</b> channel only.
+  If your client version does not match the dump, FF0L shows a popup with the fix.
 </p>
 
 <p align="center">
@@ -58,16 +59,30 @@ Configs and the offset cache live in `%AppData%\ff0l`.
 
 ## Offsets
 
-FF0L does not ship a frozen offset list.
+FF0L does not ship a frozen offset list. It reads your running Roblox build from the process path (`version-…`) and compares it to the dump on [`offsets.imtheo.lol`](https://offsets.imtheo.lol).
 
 On startup it:
 
-1. Asks `offsets.imtheo.lol` for the current Roblox version
+1. Asks `offsets.imtheo.lol` for the current **LIVE** Roblox version
 2. Downloads `offsets.json` when that version changed
 3. Applies the table and writes it to `%AppData%\ff0l`
 4. Falls back to the last good cache if you are offline
 
-Settings shows the active version hash and a **Refresh** control if you want to force a pull. After a Roblox update, launch FF0L and let it sync — you do not edit offsets by hand.
+The dump host only publishes the LIVE channel. Roblox can put you on another channel. If your client hash and the LIVE hash differ, FF0L opens a popup and ESP / aim stay empty until you switch.
+
+### Wrong channel
+
+Follow [Switching to LIVE](https://offsets.imtheo.lol/docs/live-channel):
+
+1. Download [Fishstrap](https://www.fishstrap.app/Fishstrap.exe)
+2. Install it, then open **Fishstrap** from Windows search
+3. Click **Configure Settings**
+4. Open the **Deployment** tab
+5. Set **Channel** to `production` and press Enter
+6. Set **Automatic channel change action** to **Never change**
+7. Press **Save and Launch**
+
+Launch Roblox through Fishstrap after that. Settings still shows the dump hash and a **Refresh** control. Do not edit offsets by hand.
 
 ---
 

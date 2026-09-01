@@ -2,6 +2,7 @@
 #define NOMINMAX
 
 #include <Windows.h>
+#include <Shellapi.h>
 #ifndef WDA_EXCLUDEFROMCAPTURE
 #define WDA_NONE 0x00000000
 #define WDA_EXCLUDEFROMCAPTURE 0x00000011
@@ -123,9 +124,6 @@ struct Quiet {
     bool team = true;
     bool vis = true;
     bool pred = false;
-    bool drawFov = true;
-    float fov = 72.0f;
-    float chance = 100.0f;
     int key = 'M';
     int bones = 1;
     int sort = 0;
@@ -230,6 +228,19 @@ static CColor FeatColor( int Feat, bool Seen ) {
 }
 
 static Vault Packs;
+
+struct Channel {
+    bool open = false;
+    bool dismissed = false;
+    bool mismatch = false;
+    unsigned nextScan = 0;
+    char client[ 48 ] = { };
+    char dump[ 48 ] = { };
+};
+
+static Channel LiveCh;
+static bool ChanMouse = false;
+
 static bool KeyWas[ 256 ] = { };
 static HANDLE FaceHandle = nullptr;
 static char FacePath[ MAX_PATH ] = { };
@@ -1215,6 +1226,7 @@ static bool DrawAimGeneral( const CRectangle& Body, const CVector& Point, bool C
 }
 
 static bool DrawAimSilent( const CRectangle& Body, const CVector& Point, bool Click, bool Press, float Scale ) {
+    ( void )Press;
     static const char* Bones[ ] = { "Head", "Neck", "Chest", "Stomach", "Body", "Legs" };
     float Pad = 14.0f * Scale;
     float Gap = 16.0f * Scale;
@@ -1234,15 +1246,9 @@ static bool DrawAimSilent( const CRectangle& Body, const CVector& Point, bool Cl
     Busy = DrawSwitch( Third, "Visible only", "silent.vis", Mute.vis, Point, Click, Scale ) || Busy;
     CRectangle Fourth( Left, Third.Bottom( ) + 2.0f * Scale, Col, Row );
     Busy = DrawSwitch( Fourth, "Prediction", "silent.pred", Mute.pred, Point, Click, Scale ) || Busy;
-    CRectangle Fifth( Left, Fourth.Bottom( ) + 2.0f * Scale, Col, Row );
-    Busy = DrawSwitch( Fifth, "Draw FOV", "silent.drawfov", Mute.drawFov, Point, Click, Scale ) || Busy;
-    Busy = DrawBind( Left, Fifth.Bottom( ) + 10.0f * Scale, "Silent key", "silent.listen", Mute.key, Mute.listen, Point, Click, Scale ) || Busy;
+    Busy = DrawBind( Left, Fourth.Bottom( ) + 10.0f * Scale, "Silent key", "silent.listen", Mute.key, Mute.listen, Point, Click, Scale ) || Busy;
 
     float Slide = Top;
-    Busy = DrawSlider( Right, Slide, Col, "FOV", "silent.fov", Mute.fov, 10.0f, 360.0f, Point, Click, Press, Scale ) || Busy;
-    Slide += 32.0f * Scale;
-    Busy = DrawSlider( Right, Slide, Col, "Chance", "silent.chance", Mute.chance, 0.0f, 100.0f, Point, Click, Press, Scale ) || Busy;
-    Slide += 34.0f * Scale;
     static const char* Sorts[ ] = { "FOV", "Distance", "Combine" };
     Busy = DrawDrop( Right, Slide, Col, "Priority", "silent.sort", Sorts, 3, Mute.sort, Point, Click, Scale ) || Busy;
     Slide += Font->LineSpan + 38.0f * Scale;
@@ -1427,7 +1433,7 @@ static PageFit FitOf( float Scale ) {
     Fit.gap = 8.0f * Scale;
     Fit.head = 36.0f * Scale;
     Fit.general = 200.0f * Scale;
-    Fit.silent = 268.0f * Scale;
+    Fit.silent = 220.0f * Scale;
     Fit.target = ( 276.0f + ( Aim.drawFov ? 32.0f : 0.0f ) ) * Scale;
     Fit.rageJump = 128.0f * Scale;
     Fit.rageNoclip = 58.0f * Scale;
@@ -1774,9 +1780,6 @@ static void PackState( char* Out, int Cap ) {
     PackPut( Out, Cap, "silent.team", Mute.team ? 1 : 0 );
     PackPut( Out, Cap, "silent.vis", Mute.vis ? 1 : 0 );
     PackPut( Out, Cap, "silent.pred", Mute.pred ? 1 : 0 );
-    PackPut( Out, Cap, "silent.drawFov", Mute.drawFov ? 1 : 0 );
-    PackPut( Out, Cap, "silent.fov", ( int )Mute.fov );
-    PackPut( Out, Cap, "silent.chance", ( int )Mute.chance );
     PackPut( Out, Cap, "silent.key", Mute.key );
     PackPut( Out, Cap, "silent.bones", Mute.bones );
     PackPut( Out, Cap, "silent.sort", Mute.sort );
@@ -1842,9 +1845,6 @@ static void ApplyState( const char* Body ) {
     store::TakeB( Body, "silent.team", Mute.team );
     store::TakeB( Body, "silent.vis", Mute.vis );
     store::TakeB( Body, "silent.pred", Mute.pred );
-    store::TakeB( Body, "silent.drawFov", Mute.drawFov );
-    store::TakeF( Body, "silent.fov", Mute.fov );
-    store::TakeF( Body, "silent.chance", Mute.chance );
     store::Take( Body, "silent.key", Mute.key );
     store::Take( Body, "silent.bones", Mute.bones );
     store::Take( Body, "silent.sort", Mute.sort );
@@ -1907,14 +1907,6 @@ static void ApplyState( const char* Body ) {
         Aim.bones = 1;
     if ( Aim.sort < 0 || Aim.sort > 2 )
         Aim.sort = 0;
-    if ( Mute.fov < 10.0f )
-        Mute.fov = 10.0f;
-    if ( Mute.fov > 360.0f )
-        Mute.fov = 360.0f;
-    if ( Mute.chance < 0.0f )
-        Mute.chance = 0.0f;
-    if ( Mute.chance > 100.0f )
-        Mute.chance = 100.0f;
     if ( Mute.bones == 0 )
         Mute.bones = 1;
     if ( Mute.sort < 0 || Mute.sort > 2 )
@@ -2052,6 +2044,138 @@ static bool DrawAction( const CRectangle& Row, const char* Label, const CVector&
         : Mix( Style->Text, Dress.inkHot, Tone );
     Canvas->Text( CVector( Row.Left + ( Row.Width - Size.Horizontal ) * 0.5f, Row.Top + ( Row.Height - Font->LineSpan ) * 0.5f ), Ink, Label );
     return Over && Click;
+}
+
+static bool ReadClientVer( char* Out, int Cap ) {
+    static const wchar_t* Names[ ] = { L"RobloxPlayerBeta.exe", L"RobloxPlayer.exe", L"Windows10Universal.exe" };
+    if ( !Out || Cap < 8 )
+        return false;
+    Out[ 0 ] = 0;
+    for ( const wchar_t* Name : Names ) {
+        DWORD Pid = world::FindPid( Name );
+        if ( !Pid )
+            continue;
+        HANDLE Handle = OpenProcess( PROCESS_QUERY_LIMITED_INFORMATION, FALSE, Pid );
+        if ( !Handle )
+            continue;
+        char Path[ MAX_PATH ] = { };
+        DWORD Size = ( DWORD )sizeof( Path );
+        BOOL Ok = QueryFullProcessImageNameA( Handle, 0, Path, &Size );
+        CloseHandle( Handle );
+        if ( !Ok )
+            continue;
+        const char* Found = strstr( Path, "version-" );
+        if ( !Found )
+            continue;
+        lstrcpynA( Out, Found, Cap );
+        char* Cut = strpbrk( Out, "\\/" );
+        if ( Cut )
+            *Cut = 0;
+        return Out[ 0 ] != 0;
+    }
+    return false;
+}
+
+static void TickChannel( ) {
+    unsigned Now = GetTickCount( );
+    if ( Now < LiveCh.nextScan )
+        return;
+    LiveCh.nextScan = Now + 2000;
+
+    char Client[ 48 ] = { };
+    bool HaveClient = ReadClientVer( Client, ( int )sizeof( Client ) );
+    char Dump[ 48 ] = { };
+    if ( offsets::Ready( ) )
+        offsets::CopyVersion( Dump, ( int )sizeof( Dump ) );
+
+    if ( HaveClient )
+        lstrcpynA( LiveCh.client, Client, ( int )sizeof( LiveCh.client ) );
+    else
+        LiveCh.client[ 0 ] = 0;
+    lstrcpynA( LiveCh.dump, Dump, ( int )sizeof( LiveCh.dump ) );
+
+    LiveCh.mismatch = HaveClient && Dump[ 0 ] && _stricmp( Client, Dump ) != 0;
+    if ( !LiveCh.mismatch ) {
+        LiveCh.open = false;
+        LiveCh.dismissed = false;
+        return;
+    }
+    if ( !LiveCh.dismissed )
+        LiveCh.open = true;
+}
+
+static void DrawChannelNotice( float Across, float Vertical, const CVector& Point, bool Click, float Scale ) {
+    if ( !LiveCh.open || !Font )
+        return;
+
+    float Line = Font->LineSpan;
+    float Pad = 18.0f * Scale;
+    float HeadH = 42.0f * Scale;
+    float ActH = 32.0f * Scale;
+    float AfterSteps = 18.0f * Scale;
+    float StepGap = 6.0f * Scale;
+    float Wide = 448.0f * Scale;
+    float Tall = HeadH + 14.0f * Scale + Line + 6.0f * Scale + Line + 12.0f * Scale + Line + 10.0f * Scale;
+    for ( int Index = 0; Index < 7; Index++ )
+        Tall += Line + StepGap;
+    Tall += AfterSteps + ActH + Pad;
+    CRectangle Shade( 0.0f, 0.0f, Across, Vertical );
+    CRectangle Card( ( Across - Wide ) * 0.5f, ( Vertical - Tall ) * 0.5f, Wide, Tall );
+    float Keep = Canvas->Opacity;
+    Canvas->Opacity = 1.0f;
+    Canvas->Rectangle( Shade, CColor( 6, 8, 12, 186 ), 0.0f );
+    Canvas->Shadow( Card, CColor( 6, 10, 18, 130 ), 10.0f * Scale, 22.0f * Scale );
+    Canvas->Rectangle( Card, Style->Surface, 10.0f * Scale );
+    CRectangle Head( Card.Left, Card.Top, Card.Width, HeadH );
+    DrawIce( Head, Card, 10.0f * Scale, 1.0f );
+
+    CFont* Title = Heading.get( );
+    if ( Title && Title->LineSpan > 1.0f )
+        Canvas->Write( Title, CVector( Card.Left + Pad, Head.Top + ( Head.Height - Title->LineSpan ) * 0.5f ), Dress.inkHot, "Wrong Roblox channel" );
+    else
+        Canvas->Text( CVector( Card.Left + Pad, Head.Top + 12.0f * Scale ), Dress.inkHot, "Wrong Roblox channel" );
+
+    float Y = Head.Bottom( ) + 14.0f * Scale;
+    char LineText[ 96 ] = { };
+    snprintf( LineText, sizeof( LineText ), "Your client  %s", LiveCh.client[ 0 ] ? LiveCh.client : "unknown" );
+    Canvas->Text( CVector( Card.Left + Pad, Y ), Style->Text, LineText );
+    Y += Line + 6.0f * Scale;
+    snprintf( LineText, sizeof( LineText ), "LIVE dump    %s", LiveCh.dump[ 0 ] ? LiveCh.dump : "unknown" );
+    Canvas->Text( CVector( Card.Left + Pad, Y ), Style->Faint, LineText );
+    Y += Line + 12.0f * Scale;
+    Canvas->Text( CVector( Card.Left + Pad, Y ), Style->Faint, "Offsets are dumped for the LIVE channel only." );
+    Y += Line + 10.0f * Scale;
+
+    static const char* Steps[ ] = {
+        "1. Download Fishstrap from fishstrap.app",
+        "2. Install it, then open Fishstrap from search",
+        "3. Click Configure Settings",
+        "4. Open the Deployment tab",
+        "5. Set Channel to production and press Enter",
+        "6. Set Automatic channel change to Never change",
+        "7. Press Save and Launch"
+    };
+    for ( const char* Step : Steps ) {
+        Canvas->Text( CVector( Card.Left + Pad, Y ), Style->Text, Step );
+        Y += Line + StepGap;
+    }
+
+    Y += AfterSteps;
+    float Gap = 8.0f * Scale;
+    float Half = ( Card.Width - Pad * 2.0f - Gap ) * 0.5f;
+    CRectangle Get( Card.Left + Pad, Y, Half, ActH );
+    CRectangle Ok( Get.Right( ) + Gap, Y, Half, ActH );
+    if ( DrawAction( Get, "Get Fishstrap", Point, Click, Scale, false ) )
+        ShellExecuteA( nullptr, "open", "https://www.fishstrap.app/Fishstrap.exe", nullptr, nullptr, SW_SHOWNORMAL );
+    if ( DrawAction( Ok, "Got it", Point, Click, Scale, false ) ) {
+        LiveCh.open = false;
+        LiveCh.dismissed = true;
+    }
+
+    ur::overlay::Options& Overlay = ur::app::overlay_options( );
+    Overlay.click_through = false;
+    Input->ApplyPosition( Point.Horizontal, Point.Vertical );
+    Canvas->Opacity = Keep;
 }
 
 static bool DrawConfigs( const CRectangle& Content, const CVector& Point, bool Click, bool Press, float Scale, float Ease ) {
@@ -2842,6 +2966,19 @@ static float AimRadius( float Scale, float Fov ) {
     const world::Snap& Snap = world::View( );
     float Wide = ( float )Snap.clientW;
     float Tall = ( float )Snap.clientH;
+    HWND Overlay = ( HWND )ur::app::window( );
+    if ( Overlay && Snap.clientW > 64 && Snap.clientH > 64 ) {
+        POINT A{ Snap.clientX, Snap.clientY };
+        POINT B{ Snap.clientX + Snap.clientW, Snap.clientY + Snap.clientH };
+        ScreenToClient( Overlay, &A );
+        ScreenToClient( Overlay, &B );
+        Wide = ( float )( B.x - A.x );
+        Tall = ( float )( B.y - A.y );
+        if ( Wide < 0.0f )
+            Wide = -Wide;
+        if ( Tall < 0.0f )
+            Tall = -Tall;
+    }
     if ( Wide < 64.0f )
         Wide = ( float )ur::app::width( );
     if ( Tall < 64.0f )
@@ -2852,6 +2989,29 @@ static float AimRadius( float Scale, float Fov ) {
     if ( Fov >= 359.0f )
         return Half * Scale;
     return Half * ( Fov / 360.0f ) * Scale;
+}
+
+static world::Vec3 SilentBone( const world::Actor& Item ) {
+    static const int Slot[ 6 ] = {
+        world::BoneHead, world::BoneUpper, world::BoneUpper,
+        world::BoneLower, world::BoneRoot, world::BoneLLegU
+    };
+    if ( Mute.bones & 1 ) {
+        world::Vec3 Pos = Item.boneOk[ world::BoneHead ] ? Item.world[ world::BoneHead ] : Item.head;
+        if ( Item.high.y > Pos.y )
+            Pos.y += ( Item.high.y - Pos.y ) * 0.28f;
+        return Pos;
+    }
+    for ( int Index = 1; Index < 6; Index++ ) {
+        if ( ( Mute.bones & ( 1 << Index ) ) == 0 )
+            continue;
+        int Bone = Slot[ Index ];
+        if ( Item.boneOk[ Bone ] )
+            return Item.world[ Bone ];
+    }
+    if ( Item.boneOk[ world::BoneHead ] )
+        return Item.world[ world::BoneHead ];
+    return Item.head;
 }
 
 static void TickAim( float Scale ) {
@@ -2877,19 +3037,21 @@ static void TickAim( float Scale ) {
     bool MuteHeld = Held( Mute.key );
     bool SilentOk = Mute.on && MuteHeld && !ListenBusy;
     bool MouseOk = Aim.on && Held( Aim.key ) && !ListenBusy;
+    if ( !Mute.on )
+        silent::Remove( );
     if ( !SilentOk && !MouseOk ) {
         RestX = 0.0f;
         RestY = 0.0f;
         if ( !Aim.sticky || !Held( Aim.key ) )
             Hold = 0;
-        silent::Off( );
+        if ( Mute.on )
+            silent::Off( );
         return;
     }
 
     const world::Snap& Snap = world::View( );
     if ( !Snap.ready || Snap.count <= 0 ) {
-        if ( !SilentOk )
-            silent::Off( );
+        silent::Off( );
         return;
     }
 
@@ -2957,70 +3119,61 @@ static void TickAim( float Scale ) {
     };
 
     if ( SilentOk ) {
+        CVector GhostAt;
         CVector Cross = ScreenMid( );
         CVector KeepMid = Mid;
+        float KeepScale = Scale;
         Mid = Cross;
-        CVector GhostAt;
-        const world::Actor* Ghost = Pick( Mute.fov, Mute.team, Mute.bones, false, Mute.vis, Mute.sort, &GhostAt );
-        if ( !Ghost && Mute.vis )
-            Ghost = Pick( Mute.fov, Mute.team, Mute.bones, false, false, Mute.sort, &GhostAt );
+        Scale = 1.0f;
+        const world::Actor* Ghost = Pick( 360.0f, Mute.team, Mute.bones, Mute.pred, Mute.vis, Mute.sort, &GhostAt );
         Mid = KeepMid;
-        static world::Actor Stick;
-        static CVector StickAt;
-        static uintptr_t StickWho = 0;
-        static unsigned StickMs = 0;
-        unsigned NowTick = GetTickCount( );
+        Scale = KeepScale;
         if ( Ghost ) {
-            Stick = *Ghost;
-            StickAt = GhostAt;
-            StickWho = Ghost->player;
-            StickMs = NowTick;
-        } else if ( StickWho && Stick.character && NowTick - StickMs < 80 ) {
-            Ghost = &Stick;
-            GhostAt = StickAt;
-        } else {
-            StickWho = 0;
-        }
-        static bool WasMute = false;
-        static bool RollOk = false;
-        if ( Mute.chance <= 0.0f )
-            RollOk = false;
-        else if ( Mute.chance >= 100.0f )
-            RollOk = true;
-        else if ( SilentOk && !WasMute )
-            RollOk = ( rand( ) % 100 ) < ( int )Mute.chance;
-        if ( !SilentOk )
-            RollOk = false;
-        WasMute = SilentOk;
-        if ( Ghost && RollOk ) {
-            world::Vec3 AimAt = AimPoint( *Ghost, false, Mute.bones, false );
+            world::Vec3 AimAt = SilentBone( *Ghost );
             if ( Mute.pred ) {
-                world::Vec3 Ahead = AimPoint( *Ghost, true, Mute.bones, true );
-                CVector RawAt;
-                CVector PredAt;
-                if ( EspDot( AimAt, RawAt ) && EspDot( Ahead, PredAt ) ) {
-                    float Dx = PredAt.Horizontal - RawAt.Horizontal;
-                    float Dy = PredAt.Vertical - RawAt.Vertical;
-                    if ( Dx * Dx + Dy * Dy < 1600.0f )
-                        AimAt = Ahead;
+                float Speed = sqrtf( Ghost->vel.x * Ghost->vel.x + Ghost->vel.y * Ghost->vel.y + Ghost->vel.z * Ghost->vel.z );
+                if ( Speed >= 1.5f ) {
+                    world::Vec3 Vel = Ghost->vel;
+                    if ( Speed > 90.0f ) {
+                        Vel.x *= 90.0f / Speed;
+                        Vel.y *= 90.0f / Speed;
+                        Vel.z *= 90.0f / Speed;
+                    }
+                    float Ping = Snap.localPing;
+                    if ( Ghost->ping > 0.0f )
+                        Ping = ( Ping + Ghost->ping ) * 0.5f;
+                    if ( Ping > 0.25f )
+                        Ping = 0.25f;
+                    float Dist = Ghost->dist;
+                    if ( Dist < 1.0f )
+                        Dist = 1.0f;
+                    float Time = Ping * 0.25f + Dist / 1200.0f;
+                    if ( Time > 0.18f )
+                        Time = 0.18f;
+                    AimAt.x += Vel.x * Time;
+                    AimAt.y += Vel.y * Time * 0.25f;
+                    AimAt.z += Vel.z * Time;
                 }
             }
             world::Dot View;
             float Sx = 0.0f;
             float Sy = 0.0f;
+            CVector At;
             if ( world::ToView( AimAt, View ) ) {
                 Sx = View.x;
                 Sy = View.y;
+            } else if ( EspDot( AimAt, At ) ) {
+                OverlayToView( At, Sx, Sy );
             } else {
                 OverlayToView( GhostAt, Sx, Sy );
             }
-            silent::On( AimAt, Sx, Sy );
+            silent::On( AimAt, Sx, Sy, true );
         } else {
             silent::Off( );
         }
         if ( !MouseOk )
             return;
-    } else {
+    } else if ( Mute.on ) {
         silent::Off( );
     }
     if ( !MouseOk )
@@ -3130,12 +3283,6 @@ static void DrawFovRings( float Scale ) {
         float Radius = AimRadius( Scale, Aim.fov );
         Canvas->Opacity = Keep * Ring * Pulse;
         Canvas->Border( CRectangle( Mid.Horizontal - Radius, Mid.Vertical - Radius, Radius * 2.0f, Radius * 2.0f ), Mix( Style->Accent, Style->AccentSoft, 0.3f ), Radius, 1.6f * Scale );
-    }
-    if ( Mute.on && Mute.drawFov ) {
-        float Ring = ur::motion::toward( "silent.fov.ring", 1.0f, 18.0f );
-        float Radius = AimRadius( Scale, Mute.fov );
-        Canvas->Opacity = Keep * Ring * Pulse;
-        Canvas->Border( CRectangle( Mid.Horizontal - Radius, Mid.Vertical - Radius, Radius * 2.0f, Radius * 2.0f ), Mix( Style->AccentSoft, CColor( 180, 220, 255 ), 0.35f ), Radius, 1.5f * Scale );
     }
     Canvas->Opacity = Keep;
 }
@@ -3433,7 +3580,7 @@ static void Draw( float Across, float Vertical ) {
     CRectangle Shut = CloseBounds( Header, Scale );
 
     bool Press = Held( VK_LBUTTON );
-    bool Click = Press && !Menu.mouse;
+    bool Click = Press && !Menu.mouse && !LiveCh.open;
     bool OverExplore = false;
     if ( Tree.open ) {
         PlaceExplore( Across, Vertical, Scale );
@@ -3542,12 +3689,15 @@ static void Tick( ) {
     Tokens( );
     PackBoot( );
     offsets::Boot( );
+    TickChannel( );
     world::Pulse( Esp.on || Aim.on || Mute.on, Aim.on || Mute.on, Esp.skeleton, Esp.range, Esp.on || Aim.vis || ( Mute.on && Mute.vis ) );
     TickMenuMouse( );
     TickAim( Style->Scale > 0.0f ? Style->Scale : 1.0f );
     move::Tick( Context->DeltaTime, Menu.listen || Aim.listen || Mute.listen );
-    if ( !Mute.on )
+    if ( !Mute.on ) {
+        silent::Off( );
         silent::Remove( );
+    }
     if ( Tree.open ) {
         if ( !browse::Live( ) )
             browse::Open( );
@@ -3567,7 +3717,10 @@ static void Tick( ) {
     }
 
     if ( Edge( VK_ESCAPE, Menu.escape ) ) {
-        if ( Packs.type )
+        if ( LiveCh.open ) {
+            LiveCh.open = false;
+            LiveCh.dismissed = true;
+        } else if ( Packs.type )
             Packs.type = false;
         else if ( Tree.type )
             Tree.type = false;
@@ -3613,6 +3766,10 @@ static void Tick( ) {
     TickAfk( );
     TickStream( );
 
+    bool Press = Held( VK_LBUTTON );
+    bool ChanClick = Press && !ChanMouse;
+    ChanMouse = Press;
+
     if ( !Menu.visible ) {
         Tree.held = false;
         float Across = ( float )ur::app::width( );
@@ -3624,14 +3781,18 @@ static void Tick( ) {
         DrawFovRings( Scale );
         DrawExploreMark( Scale );
         bool OverMark = DrawMarks( Across, Vertical, Scale, Point, true );
+        DrawChannelNotice( Across, Vertical, Point, ChanClick, Scale );
         ur::overlay::Options& Overlay = ur::app::overlay_options( );
-        Overlay.click_through = !OverMark && !Badge.held;
-        Menu.mouse = Held( VK_LBUTTON );
+        Overlay.click_through = !LiveCh.open && !OverMark && !Badge.held;
+        Menu.mouse = Press;
         Pace( );
         return;
     }
 
     Draw( ( float )ur::app::width( ), ( float )ur::app::height( ) );
+    DrawChannelNotice( ( float )ur::app::width( ), ( float )ur::app::height( ), Cursor( ), ChanClick, Style->Scale > 0.0f ? Style->Scale : 1.0f );
+    if ( LiveCh.open )
+        ur::app::overlay_options( ).click_through = false;
     Pace( );
 }
 

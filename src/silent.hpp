@@ -50,8 +50,11 @@ struct Hook {
     int16_t savedView[ 2 ] = { };
     bool haveView = false;
     uintptr_t mouseObj = 0;
+    uintptr_t mouseObj2 = 0;
     float savedMouse[ 2 ] = { };
+    float savedMouse2[ 2 ] = { };
     bool haveMouse = false;
+    bool haveMouse2 = false;
     bool pinned = false;
     unsigned lastFail = 0;
 };
@@ -361,15 +364,16 @@ inline uintptr_t Camera( ) {
 
 inline void RestoreMouse( ) {
     Hook& H = Live( );
-    if ( !H.haveMouse ) {
-        H.pinned = false;
-        return;
-    }
-    if ( H.pinned && H.mouseObj && world::Core( ).off.mousePos )
-        world::Poke( H.mouseObj + world::Core( ).off.mousePos, H.savedMouse, sizeof( H.savedMouse ) );
+    world::Engine& E = world::Core( );
+    if ( H.haveMouse && H.mouseObj && E.off.mousePos )
+        world::Poke( H.mouseObj + E.off.mousePos, H.savedMouse, sizeof( H.savedMouse ) );
+    if ( H.haveMouse2 && H.mouseObj2 && E.off.mousePos )
+        world::Poke( H.mouseObj2 + E.off.mousePos, H.savedMouse2, sizeof( H.savedMouse2 ) );
     H.haveMouse = false;
+    H.haveMouse2 = false;
     H.pinned = false;
     H.mouseObj = 0;
+    H.mouseObj2 = 0;
 }
 
 inline bool MouseObjOk( uintptr_t Obj ) {
@@ -391,18 +395,122 @@ inline void RestoreView( ) {
     H.cam = 0;
 }
 
+inline bool SlotOf( uintptr_t& Slot ) {
+    world::Engine& E = world::Core( );
+    if ( !E.base || !DescRva( ) )
+        return false;
+    Slot = E.base + DescRva( ) + FnOff( );
+    return Slot != 0;
+}
+
+inline bool LooksLikeThunk( uintptr_t Addr ) {
+    uint8_t Head[ 6 ] = { };
+    if ( !Addr || !world::Pull( Addr, Head, sizeof( Head ) ) )
+        return false;
+    return Head[ 0 ] == 0x48 && Head[ 1 ] == 0x83 && Head[ 2 ] == 0xEC && Head[ 3 ] == 0x68
+        && Head[ 4 ] == 0x49 && Head[ 5 ] == 0xBA;
+}
+
+inline bool ExtractOrig( uintptr_t Thunk, uintptr_t& Orig ) {
+    uint8_t Buf[ StubBytes ] = { };
+    if ( !Thunk || !world::Pull( Thunk, Buf, sizeof( Buf ) ) )
+        return false;
+    for ( size_t Index = 0; Index + 16 <= sizeof( Buf ); Index++ ) {
+        if ( Buf[ Index ] != 0x48 || Buf[ Index + 1 ] != 0xB8 )
+            continue;
+        if ( Buf[ Index + 10 ] != 0xFF || Buf[ Index + 11 ] != 0xD0 )
+            continue;
+        if ( Buf[ Index + 12 ] != 0x48 || Buf[ Index + 13 ] != 0x83 || Buf[ Index + 14 ] != 0xC4 || Buf[ Index + 15 ] != 0x68 )
+            continue;
+        uintptr_t Have = 0;
+        memcpy( &Have, Buf + Index + 2, sizeof( Have ) );
+        if ( !CodeInImage( Have ) || LooksLikeThunk( Have ) )
+            continue;
+        Orig = Have;
+        return true;
+    }
+    return false;
+}
+
+inline bool WriteSlot( uintptr_t Slot, uintptr_t Fn ) {
+    if ( !Slot || !Fn || !world::EnsureWrite( ) )
+        return false;
+    Protect( Slot, 8, PAGE_READWRITE );
+    if ( !WriteRaw( Slot, &Fn, sizeof( Fn ) ) )
+        return false;
+    uintptr_t Check = 0;
+    return world::Pull( Slot, Check ) && Check == Fn;
+}
+
+inline bool RestoreSlot( ) {
+    Hook& H = Live( );
+    uintptr_t Slot = H.slot;
+    if ( !Slot && !SlotOf( Slot ) )
+        return false;
+    uintptr_t Fn = 0;
+    if ( !world::Pull( Slot, Fn ) || !Fn )
+        return false;
+    if ( CodeInImage( Fn ) && !LooksLikeThunk( Fn ) ) {
+        H.slot = Slot;
+        if ( !H.original )
+            H.original = Fn;
+        return true;
+    }
+    uintptr_t Orig = 0;
+    if ( H.original && CodeInImage( H.original ) && !LooksLikeThunk( H.original ) )
+        Orig = H.original;
+    else if ( !ExtractOrig( Fn, Orig ) )
+        return false;
+    if ( !WriteSlot( Slot, Orig ) )
+        return false;
+    H.original = Orig;
+    H.slot = Slot;
+    H.installed = false;
+    H.active = false;
+    return true;
+}
+
 inline void Off( ) {
     Hook& H = Live( );
     RestoreView( );
-    if ( !H.active || !H.state )
-        return;
-    uint32_t Zero = 0;
-    WriteRaw( H.state, &Zero, sizeof( Zero ) );
+    if ( H.state ) {
+        uint32_t Zero = 0;
+        WriteRaw( H.state, &Zero, sizeof( Zero ) );
+    }
     H.active = false;
+}
+
+inline bool SlotHooked( ) {
+    uintptr_t Slot = 0;
+    uintptr_t Fn = 0;
+    if ( !SlotOf( Slot ) || !world::Pull( Slot, Fn ) )
+        return false;
+    return LooksLikeThunk( Fn );
+}
+
+inline bool Peek( uint32_t& Active, uint64_t& Calls ) {
+    Hook& H = Live( );
+    Active = 0;
+    Calls = 0;
+    uintptr_t Slot = H.slot;
+    if ( !Slot )
+        SlotOf( Slot );
+    uintptr_t Fn = 0;
+    if ( Slot && world::Pull( Slot, Fn ) && LooksLikeThunk( Fn ) )
+        Active = 1;
+    if ( !H.state )
+        return Slot != 0;
+    if ( !world::Pull( H.state, Active ) )
+        return true;
+    world::Pull( H.state + offsetof( RayState, calls ), Calls );
+    return true;
 }
 
 inline void Remove( ) {
     Hook& H = Live( );
+    Off( );
+    RestoreView( );
+    RestoreSlot( );
     if ( H.installed && OkAddr( H.original ) && H.slot ) {
         Protect( H.slot, 8, PAGE_READWRITE );
         WriteRaw( H.slot, &H.original, sizeof( H.original ) );
@@ -437,13 +545,22 @@ inline bool Install( ) {
         return false;
     }
     unsigned Now = GetTickCount( );
-    if ( H.lastFail && Now - H.lastFail < 1500 )
+    if ( H.lastFail && Now - H.lastFail < 250 )
         return false;
 
     uintptr_t Slot = E.base + DescRva( ) + FnOff( );
     uintptr_t Fn = 0;
     world::Pull( Slot, Fn );
-    if ( !CodeInImage( Fn ) ) {
+    if ( LooksLikeThunk( Fn ) ) {
+        uintptr_t Orig = 0;
+        if ( H.original && CodeInImage( H.original ) )
+            Orig = H.original;
+        else
+            ExtractOrig( Fn, Orig );
+        if ( Orig && WriteSlot( Slot, Orig ) )
+            Fn = Orig;
+    }
+    if ( !CodeInImage( Fn ) || LooksLikeThunk( Fn ) ) {
         H.lastFail = Now;
         return false;
     }
@@ -514,6 +631,25 @@ inline bool PokeMouse( uintptr_t Obj, float X, float Y ) {
     world::Engine& E = world::Core( );
     if ( !Obj || !E.off.mousePos || !world::Heap( Obj ) )
         return false;
+    Hook& H = Live( );
+    if ( !H.haveMouse ) {
+        float Have[ 2 ] = { };
+        if ( world::Pull( Obj + E.off.mousePos, Have, sizeof( Have ) ) ) {
+            H.savedMouse[ 0 ] = Have[ 0 ];
+            H.savedMouse[ 1 ] = Have[ 1 ];
+            H.mouseObj = Obj;
+            H.haveMouse = true;
+            H.pinned = true;
+        }
+    } else if ( !H.haveMouse2 && Obj != H.mouseObj ) {
+        float Have[ 2 ] = { };
+        if ( world::Pull( Obj + E.off.mousePos, Have, sizeof( Have ) ) ) {
+            H.savedMouse2[ 0 ] = Have[ 0 ];
+            H.savedMouse2[ 1 ] = Have[ 1 ];
+            H.mouseObj2 = Obj;
+            H.haveMouse2 = true;
+        }
+    }
     float Pos[ 2 ] = { X, Y };
     return world::Poke( Obj + E.off.mousePos, Pos, sizeof( Pos ) );
 }
@@ -588,19 +724,22 @@ inline bool WarpView( float Tx, float Ty, float Cx, float Cy, float Sw, float Sh
 }
 
 inline bool On( const world::Vec3& Target, float ScreenX, float ScreenY, bool Warp = true ) {
-    ( void )Warp;
     Hook& H = Live( );
     bool Hooked = false;
     unsigned Now = GetTickCount( );
-    if ( H.installed || !H.lastFail || Now - H.lastFail >= 2000 )
+    if ( H.installed || !H.lastFail || Now - H.lastFail >= 250 )
         Hooked = Install( );
     if ( Hooked ) {
         float Pos[ 3 ] = { Target.x, Target.y, Target.z };
         uint32_t One = 1;
+        float Scale = 1.0f;
         WriteRaw( H.state + offsetof( RayState, x ), Pos, sizeof( Pos ) );
+        WriteRaw( H.state + offsetof( RayState, scale ), &Scale, sizeof( Scale ) );
         WriteRaw( H.state + offsetof( RayState, active ), &One, sizeof( One ) );
         H.active = true;
     }
+    if ( !Warp )
+        return Hooked;
     const world::Snap& Snap = world::View( );
     float Sw = ( float )( Snap.viewW > 8 ? Snap.viewW : Snap.clientW );
     float Sh = ( float )( Snap.viewH > 8 ? Snap.viewH : Snap.clientH );

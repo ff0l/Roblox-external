@@ -1325,6 +1325,24 @@ inline void BindBones( Actor& Item, bool NeedSkel ) {
         char Have[ 40 ] = { };
         if ( !InstName( Parts[ Index ], Have, ( int )sizeof( Have ) ) )
             continue;
+        if ( _stricmp( Have, "Left Leg" ) == 0 ) {
+            if ( !Item.part[ BoneLLegU ] )
+                Item.part[ BoneLLegU ] = Parts[ Index ];
+            if ( !Item.part[ BoneLLegL ] )
+                Item.part[ BoneLLegL ] = Parts[ Index ];
+            if ( !Item.part[ BoneLFoot ] )
+                Item.part[ BoneLFoot ] = Parts[ Index ];
+            continue;
+        }
+        if ( _stricmp( Have, "Right Leg" ) == 0 ) {
+            if ( !Item.part[ BoneRLegU ] )
+                Item.part[ BoneRLegU ] = Parts[ Index ];
+            if ( !Item.part[ BoneRLegL ] )
+                Item.part[ BoneRLegL ] = Parts[ Index ];
+            if ( !Item.part[ BoneRFoot ] )
+                Item.part[ BoneRFoot ] = Parts[ Index ];
+            continue;
+        }
         for ( int Slot = 0; Slot < BoneMax; Slot++ ) {
             if ( Item.part[ Slot ] )
                 continue;
@@ -1359,8 +1377,133 @@ inline void BindBones( Actor& Item, bool NeedSkel ) {
     if ( !Item.part[ BoneUpper ] )
         Item.part[ BoneUpper ] = Item.part[ BoneRoot ];
     if ( !Item.part[ BoneLower ] )
-        Item.part[ BoneLower ] = Item.part[ BoneRoot ];
-    ( void )NeedSkel;
+        Item.part[ BoneLower ] = Item.part[ BoneUpper ] ? Item.part[ BoneUpper ] : Item.part[ BoneRoot ];
+
+    auto ShareLimb = [ & ]( int Upper, int Lower, int Foot ) {
+        if ( Item.part[ Upper ] && !Item.part[ Lower ] )
+            Item.part[ Lower ] = Item.part[ Upper ];
+        if ( Item.part[ Lower ] && !Item.part[ Foot ] )
+            Item.part[ Foot ] = Item.part[ Lower ];
+        if ( Item.part[ Upper ] && !Item.part[ Foot ] )
+            Item.part[ Foot ] = Item.part[ Upper ];
+    };
+    ShareLimb( BoneLLegU, BoneLLegL, BoneLFoot );
+    ShareLimb( BoneRLegU, BoneRLegL, BoneRFoot );
+
+    auto FillNamedBone = [ & ]( const char* Name, int Slot ) {
+        if ( Item.part[ Slot ] || !Name || !Name[ 0 ] )
+            return;
+        for ( int Index = 0; Index < Count; Index++ ) {
+            if ( !IsNamed( List[ Index ], Name ) )
+                continue;
+            Vec3 Test;
+            if ( !PartPos( List[ Index ], Test ) )
+                continue;
+            Item.part[ Slot ] = List[ Index ];
+            return;
+        }
+    };
+    FillNamedBone( "RightUpperLeg", BoneRLegU );
+    FillNamedBone( "RightLowerLeg", BoneRLegL );
+    FillNamedBone( "RightFoot", BoneRFoot );
+    FillNamedBone( "LeftUpperLeg", BoneLLegU );
+    FillNamedBone( "LeftLowerLeg", BoneLLegL );
+    FillNamedBone( "LeftFoot", BoneLFoot );
+    if ( !Item.part[ BoneRLegU ] )
+        FillNamedBone( "Right Leg", BoneRLegU );
+    if ( !Item.part[ BoneLLegU ] )
+        FillNamedBone( "Left Leg", BoneLLegU );
+    ShareLimb( BoneLLegU, BoneLLegL, BoneLFoot );
+    ShareLimb( BoneRLegU, BoneRLegL, BoneRFoot );
+
+    if ( NeedSkel ) {
+        Vec3 LowerPos = Item.root;
+        if ( Item.part[ BoneLower ] )
+            PartPos( Item.part[ BoneLower ], LowerPos );
+        Vec3 SplitOrigin = Item.root;
+        if ( Item.part[ BoneUpper ] )
+            PartPos( Item.part[ BoneUpper ], SplitOrigin );
+        Vec3 Right = { 1.0f, 0.0f, 0.0f };
+        float Rot[ 9 ] = { };
+        uintptr_t RotPart = Item.part[ BoneRoot ] ? Item.part[ BoneRoot ] : Item.part[ BoneUpper ];
+        if ( RotPart && PartRot( RotPart, Rot ) ) {
+            Right.x = Rot[ 0 ];
+            Right.z = Rot[ 6 ];
+            float Len = sqrtf( Right.x * Right.x + Right.z * Right.z );
+            if ( Len > 0.01f ) {
+                Right.x /= Len;
+                Right.z /= Len;
+            }
+        }
+
+        struct LegCand {
+            uintptr_t part = 0;
+            float y = 0.0f;
+        };
+        LegCand RightLeg[ 8 ] = { };
+        LegCand LeftLeg[ 8 ] = { };
+        int RightN = 0;
+        int LeftN = 0;
+
+        for ( int Index = 0; Index < Used; Index++ ) {
+            bool Taken = false;
+            for ( int Slot = 0; Slot < BoneMax; Slot++ ) {
+                if ( Item.part[ Slot ] == Parts[ Index ] ) {
+                    Taken = true;
+                    break;
+                }
+            }
+            if ( Taken )
+                continue;
+            if ( Spot[ Index ].y > LowerPos.y - 0.35f )
+                continue;
+            float Dx = Spot[ Index ].x - SplitOrigin.x;
+            float Dz = Spot[ Index ].z - SplitOrigin.z;
+            float Side = Dx * Right.x + Dz * Right.z;
+            if ( Side >= 0.05f && RightN < 8 ) {
+                RightLeg[ RightN ].part = Parts[ Index ];
+                RightLeg[ RightN ].y = Spot[ Index ].y;
+                RightN++;
+            } else if ( Side <= -0.05f && LeftN < 8 ) {
+                LeftLeg[ LeftN ].part = Parts[ Index ];
+                LeftLeg[ LeftN ].y = Spot[ Index ].y;
+                LeftN++;
+            }
+        }
+
+        auto SortLegs = []( LegCand* List, int Count ) {
+            for ( int A = 0; A < Count; A++ ) {
+                for ( int B = A + 1; B < Count; B++ ) {
+                    if ( List[ B ].y > List[ A ].y ) {
+                        LegCand Swap = List[ A ];
+                        List[ A ] = List[ B ];
+                        List[ B ] = Swap;
+                    }
+                }
+            }
+        };
+        auto AssignLeg = [ & ]( LegCand* List, int Count, int Upper, int Lower, int Foot ) {
+            if ( Count < 1 )
+                return;
+            SortLegs( List, Count );
+            if ( !Item.part[ Upper ] )
+                Item.part[ Upper ] = List[ 0 ].part;
+            if ( !Item.part[ Lower ] ) {
+                if ( Count > 1 )
+                    Item.part[ Lower ] = List[ 1 ].part;
+                else
+                    Item.part[ Lower ] = List[ 0 ].part;
+            }
+            if ( !Item.part[ Foot ] ) {
+                if ( Count > 2 )
+                    Item.part[ Foot ] = List[ 2 ].part;
+                else
+                    Item.part[ Foot ] = List[ Count - 1 ].part;
+            }
+        };
+        AssignLeg( LeftLeg, LeftN, BoneLLegU, BoneLLegL, BoneLFoot );
+        AssignLeg( RightLeg, RightN, BoneRLegU, BoneRLegL, BoneRFoot );
+    }
 }
 
 inline void Discover( bool NeedSkel ) {
